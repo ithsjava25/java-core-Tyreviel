@@ -14,14 +14,21 @@ public class Warehouse {
     private Warehouse(String name) {
         this.name = name;
     }
+    public static Warehouse getInstance() {
+        return getInstance("default");
+    }
 
     public static Warehouse getInstance(String name) {
         return INSTANCES.computeIfAbsent(name, Warehouse::new);
     }
     public void addProduct(Product product) {
         if (product == null) throw new IllegalArgumentException("Product cannot be null.");
+        if (products.containsKey(product.uuid())) {
+            throw new IllegalArgumentException("Product with that id already exists, use updateProduct for updates.");
+        }
         products.put(product.uuid(), product);
     }
+
 
     public List<Product> getProducts() {
         return List.copyOf(products.values());
