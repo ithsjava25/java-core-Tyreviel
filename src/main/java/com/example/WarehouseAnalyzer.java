@@ -147,24 +147,29 @@ class WarehouseAnalyzer {
      */
     public List<Product> findPriceOutliers(double standardDeviations) {
         List<Product> products = warehouse.getProducts();
-        int n = products.size();
-        if (n == 0) return List.of();
-        double sum = products.stream().map(Product::price).mapToDouble(bd -> bd.doubleValue()).sum();
-        double mean = sum / n;
-        double variance = products.stream()
-                .map(Product::price)
-                .mapToDouble(bd -> Math.pow(bd.doubleValue() - mean, 2))
-                .sum() / n;
-        double std = Math.sqrt(variance);
-        double threshold = standardDeviations * std;
-        List<Product> outliers = new ArrayList<>();
-        for (Product p : products) {
-            double diff = Math.abs(p.price().doubleValue() - mean);
-            if (diff > threshold) outliers.add(p);
-        }
-        return outliers;
+        if (products.size() < 4) return List.of();
+
+        List<Double> prices = products.stream()
+                .map(p -> p.price().doubleValue())
+                .sorted()
+                .toList();
+
+        int n = prices.size();
+        double q1 = prices.get(n / 4);
+        double q3 = prices.get((3 * n) / 4);
+        double iqr = q3 - q1;
+
+        double lowerBound = q1 - standardDeviations * iqr;
+        double upperBound = q3 + standardDeviations * iqr;
+
+        return products.stream()
+                .filter(p -> {
+                    double price = p.price().doubleValue();
+                    return price < lowerBound || price > upperBound;
+                })
+                .toList();
     }
-    
+
     /**
      * Groups all shippable products into ShippingGroup buckets such that each group's total weight
      * does not exceed the provided maximum. The goal is to minimize the number of groups and/or total
@@ -176,7 +181,7 @@ class WarehouseAnalyzer {
      */
     public List<ShippingGroup> optimizeShippingGroups(BigDecimal maxWeightPerGroup) {
         double maxW = maxWeightPerGroup.doubleValue();
-        List<Shippable> items = warehouse.shippableProducts();
+        List<Shippable> items = new ArrayList<>(warehouse.shippableProducts()); //
         // Sort by descending weight (First-Fit Decreasing)
         items.sort((a, b) -> Double.compare(Objects.requireNonNullElse(b.weight(), 0.0), Objects.requireNonNullElse(a.weight(), 0.0)));
         List<List<Shippable>> bins = new ArrayList<>();
