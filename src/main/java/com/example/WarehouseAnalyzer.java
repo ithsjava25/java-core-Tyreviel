@@ -187,33 +187,36 @@ class WarehouseAnalyzer {
      * @return list of ShippingGroup objects covering all shippable products
      */
     public List<ShippingGroup> optimizeShippingGroups(BigDecimal maxWeightPerGroup) {
-        double maxW = maxWeightPerGroup.doubleValue();
-        List<Shippable> items = new ArrayList<>(warehouse.shippableProducts()); //
-        // Sort by descending weight (First-Fit Decreasing)
-        items.sort((a, b) -> Double.compare(Objects.requireNonNullElse(b.weight(), 0.0), Objects.requireNonNullElse(a.weight(), 0.0)));
-        List<List<Shippable>> bins = new ArrayList<>();
+        List<Shippable> items = new ArrayList<>(warehouse.shippableProducts());
+        items.sort(Comparator.comparingDouble(Shippable::weight).reversed());
+        List<List<Shippable>> groups = new ArrayList<>();
+
         for (Shippable item : items) {
-            double w = Objects.requireNonNullElse(item.weight(), 0.0);
+            double itemWeight = item.weight();
             boolean placed = false;
-            for (List<Shippable> bin : bins) {
-                double binWeight = bin.stream().map(Shippable::weight).reduce(0.0, Double::sum);
-                if (binWeight + w <= maxW) {
-                    bin.add(item);
+
+            for (List<Shippable> group : groups) {
+                double currentWeight = group.stream().mapToDouble(Shippable::weight).sum();
+                if (BigDecimal.valueOf(currentWeight + itemWeight).compareTo(maxWeightPerGroup) <= 0) {
+                    group.add(item);
                     placed = true;
                     break;
                 }
             }
+
             if (!placed) {
-                List<Shippable> newBin = new ArrayList<>();
-                newBin.add(item);
-                bins.add(newBin);
+                List<Shippable> newGroup = new ArrayList<>();
+                newGroup.add(item);
+                groups.add(newGroup);
             }
         }
-        List<ShippingGroup> groups = new ArrayList<>();
-        for (List<Shippable> bin : bins) groups.add(new ShippingGroup(bin));
-        return groups;
+
+        return groups.stream()
+                .map(ShippingGroup::new)
+                .toList();
     }
-    
+
+
     // Business Rules Methods
     /**
      * Calculates discounted prices for perishable products based on proximity to expiration.
@@ -243,7 +246,7 @@ class WarehouseAnalyzer {
                 } else {
                     discounted = p.price();
                 }
-                discounted = discounted.setScale(2, RoundingMode.HALF_UP);
+
             }
             result.put(p, discounted);
         }
